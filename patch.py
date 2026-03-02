@@ -136,10 +136,10 @@ def main():
     extract_crx(crx_path, work)
 
     print("-- Patch manifest.json")
-    apply_jq_patch(os.path.join(work, "manifest.json"), "patched/manifest.patch.jq")
+    apply_jq_patch(os.path.join(work, "manifest.json"), "patches/manifest.patch.jq")
 
     print("-- Patch rules.json")
-    apply_jq_patch(os.path.join(work, "rules.json"), "patched/rules.patch.jq")
+    apply_jq_patch(os.path.join(work, "rules.json"), "patches/rules.patch.jq")
 
     print("-- Discover domains from JS source")
     discovered = find_extension_domains(work)
@@ -153,7 +153,7 @@ def main():
     merge_rules(os.path.join(work, "rules.json"), discovered, debloat)
 
     print("-- Remove debloat files")
-    remove_files(work, "patched/remove_files.txt")
+    remove_files(work, "patches/remove_files.txt")
 
     print("-- Repack")
     repack(work, out_zip)
