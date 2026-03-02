@@ -71,8 +71,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ver = "${{ steps.info.outputs.version }}"
+          $releases = gh release list --json tagName | ConvertFrom-Json
+          if ($releases | Where-Object { $_.tagName -eq "v$ver" }) {
+            gh release delete "v$ver" --yes
+          }
           gh release create "v$ver" "savior-patched-$ver.zip" `
             --title "Savior Patched v$ver" `
-            --notes "Automated patched build of CocCoc Savior extension v$ver." `
-            --clobber
+            --notes "Automated patched build of CocCoc Savior extension v$ver."
 
