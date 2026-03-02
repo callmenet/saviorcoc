@@ -43,8 +43,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $exists = gh release view "v${{ steps.info.outputs.version }}" 2>$null
-          "skip=$(if ($exists) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
+          gh release view "v${{ steps.info.outputs.version }}" *>$null
+          $exists = $LASTEXITCODE -eq 0
+          "skip=$($exists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+
 
       - name: Force rebuild on push
         id: check_push
