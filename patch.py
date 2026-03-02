@@ -77,6 +77,24 @@ def fetch_debloat_block_domains():
     return sorted(set(domains))
 
 
+def is_covered(domain, existing_filters):
+    parts = domain.lstrip("|").split(".")
+    for i in range(len(parts) - 1):
+        parent_filter = "||" + ".".join(parts[i:])
+        if parent_filter in existing_filters:
+            return True
+    return False
+
+def is_covered(domain, existing_filters):
+    # Check if any existing ||parent rule already covers this domain
+    parts = domain.lstrip("|").split(".")
+    for i in range(len(parts) - 1):
+        parent_filter = "||" + ".".join(parts[i:])
+        if parent_filter in existing_filters:
+            return True
+    return False
+
+
 def merge_rules(rules_path, discovered, debloat_block):
     rules = json.load(open(rules_path, encoding="utf-8"))
     existing_filters = {r["condition"].get("urlFilter", "") for r in rules}
@@ -85,6 +103,9 @@ def merge_rules(rules_path, discovered, debloat_block):
     for domain in sorted(set(discovered) | set(debloat_block)):
         f = domain if domain.startswith("||") else f"||{domain}"
         if f in existing_filters:
+            continue
+        if is_covered(domain, existing_filters):
+            print(f"  Skipped (covered by parent): {domain}")
             continue
         rules.append({
             "id":        next_id,
