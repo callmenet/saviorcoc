@@ -1,6 +1,8 @@
 import sys, os, re, json, struct, zipfile, io, shutil, subprocess
 from urllib.request import urlopen
 
+sys.stdout.reconfigure(encoding="utf-8")
+
 DEBLOAT_REG_URL = "https://raw.githubusercontent.com/bibicadotnet/coccoc-portable/main/debloat.reg"
 
 ALL_RESOURCE_TYPES = [
@@ -26,19 +28,19 @@ def extract_crx(crx_path, out_dir):
         shutil.rmtree(out_dir)
     with zipfile.ZipFile(io.BytesIO(data[zip_start:])) as zf:
         zf.extractall(out_dir)
-    print(f"Extracted {len(data[zip_start:])//1024} KB → {out_dir}/")
+    print(f"Extracted {len(data[zip_start:])//1024} KB -> {out_dir}/")
 
 
 def apply_jq_patch(file_path, jq_path):
     result = subprocess.run(
         ["jq", "-f", jq_path, file_path],
-        capture_output=True, text=True
+        capture_output=True, text=True, encoding="utf-8"
     )
     if result.returncode != 0:
         raise RuntimeError(f"jq failed:\n{result.stderr}")
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(result.stdout)
-    print(f"  {os.path.basename(file_path)} patched ✓")
+    print(f"  {os.path.basename(file_path)} patched OK")
 
 
 def find_extension_domains(ext_dir):
@@ -117,7 +119,7 @@ def repack(src_dir, out_zip):
             for f in files:
                 fp = os.path.join(root, f)
                 zf.write(fp, os.path.relpath(fp, src_dir))
-    print(f"Packed → {out_zip} ({os.path.getsize(out_zip)//1024} KB)")
+    print(f"Packed -> {out_zip} ({os.path.getsize(out_zip)//1024} KB)")
 
 
 def main():
@@ -130,33 +132,33 @@ def main():
     work     = "work"
     out_zip  = f"savior-patched-{version}.zip"
 
-    print("\n── Extract ──────────────────────────────────")
+    print("-- Extract")
     extract_crx(crx_path, work)
 
-    print("\n── Patch manifest.json ──────────────────────")
-    apply_jq_patch(f"{work}/manifest.json", "patched/manifest.patch.jq")
+    print("-- Patch manifest.json")
+    apply_jq_patch(os.path.join(work, "manifest.json"), "patched/manifest.patch.jq")
 
-    print("\n── Patch rules.json ─────────────────────────")
-    apply_jq_patch(f"{work}/rules.json", "patched/rules.patch.jq")
+    print("-- Patch rules.json")
+    apply_jq_patch(os.path.join(work, "rules.json"), "patched/rules.patch.jq")
 
-    print("\n── Discover domains from JS source ──────────")
+    print("-- Discover domains from JS source")
     discovered = find_extension_domains(work)
     print(f"  Found {len(discovered)}: {discovered}")
 
-    print("\n── Fetch debloat.reg block domains ──────────")
+    print("-- Fetch debloat.reg block domains")
     debloat = fetch_debloat_block_domains()
     print(f"  Found {len(debloat)}: {debloat}")
 
-    print("\n── Merge block domains into rules.json ──────")
-    merge_rules(f"{work}/rules.json", discovered, debloat)
+    print("-- Merge block domains into rules.json")
+    merge_rules(os.path.join(work, "rules.json"), discovered, debloat)
 
-    print("\n── Remove debloat files ─────────────────────")
+    print("-- Remove debloat files")
     remove_files(work, "patched/remove_files.txt")
 
-    print("\n── Repack ───────────────────────────────────")
+    print("-- Repack")
     repack(work, out_zip)
     shutil.rmtree(work)
-    print(f"\n✓ Done: {out_zip}\n")
+    print(f"\nDone: {out_zip}")
 
 
 if __name__ == "__main__":
