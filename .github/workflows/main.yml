@@ -43,8 +43,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view "v${{ steps.info.outputs.version }}" *>$null
-          $exists = $LASTEXITCODE -eq 0
+          $tag = "v${{ steps.info.outputs.version }}"
+          $releases = gh release list --json tagName | ConvertFrom-Json
+          $exists = ($releases | Where-Object { $_.tagName -eq $tag }).Count -gt 0
           "skip=$($exists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
 
 
