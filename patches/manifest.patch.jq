@@ -1,5 +1,7 @@
 del(.update_url) |
 
+del(.externally_connectable) |
+
 .permissions -= ["favicon", "metricsPrivate"] |
 
 .content_scripts |= map(
