@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: '0 2 * * 1'
   workflow_dispatch:
+  push:
+    paths:
+      - 'patched/**'
 
 jobs:
   patch:
@@ -35,6 +38,7 @@ jobs:
 
       - name: Skip if version already released
         id: check
+        if: github.event_name != 'push'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -42,8 +46,15 @@ jobs:
           $exists = gh release view "v${{ steps.info.outputs.version }}" 2>$null
           "skip=$(if ($exists) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
 
+      - name: Force rebuild on push
+        id: check_push
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          "skip=false" >> $env:GITHUB_OUTPUT
+
       - name: Patch and repack
-        if: steps.check.outputs.skip == 'false'
+        if: steps.check.outputs.skip == 'false' || steps.check_push.outputs.skip == 'false'
         shell: pwsh
         run: |
           python patch.py `
@@ -51,7 +62,7 @@ jobs:
             "${{ steps.info.outputs.version }}"
 
       - name: Create GitHub Release
-        if: steps.check.outputs.skip == 'false'
+        if: steps.check.outputs.skip == 'false' || steps.check_push.outputs.skip == 'false'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -59,5 +70,6 @@ jobs:
           $ver = "${{ steps.info.outputs.version }}"
           gh release create "v$ver" "savior-patched-$ver.zip" `
             --title "Savior Patched v$ver" `
-            --notes "Automated patched build of CocCoc Savior extension v$ver."
+            --notes "Automated patched build of CocCoc Savior extension v$ver." `
+            --clobber
 
