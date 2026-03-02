@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'patched/**'
+      - 'patches/**'
       - 'patch.py'
 
 jobs:
