@@ -1,0 +1,63 @@
+name: CocCoc Savior Patcher
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CocCoc
+        shell: pwsh
+        run: |
+          $tmp = "$env:TEMP\coccoc_en_machine.exe"
+          (New-Object Net.WebClient).DownloadFile("https://files1.coccoc.com/browser/x64/coccoc_en_machine.exe", $tmp)
+          Start-Process $tmp -ArgumentList "/silent /install" -Wait
+
+      - name: Get version and locate CRX
+        id: info
+        shell: pwsh
+        run: |
+          $exe = "C:\Program Files\CocCoc\Browser\Application\browser.exe"
+          if (-not (Test-Path $exe)) { throw "browser.exe not found" }
+          $ver = (Get-Item $exe).VersionInfo.ProductVersion
+          $crx = "C:\Program Files\CocCoc\Browser\Application\$ver\Extensions\savior.crx"
+          if (-not (Test-Path $crx)) { throw "savior.crx not found at: $crx" }
+          "version=$ver" >> $env:GITHUB_OUTPUT
+          "crx_path=$crx" >> $env:GITHUB_OUTPUT
+
+      - name: Skip if version already released
+        id: check
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $exists = gh release view "v${{ steps.info.outputs.version }}" 2>$null
+          "skip=$(if ($exists) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
+
+      - name: Patch and repack
+        if: steps.check.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          python patch.py `
+            "${{ steps.info.outputs.crx_path }}" `
+            "${{ steps.info.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.skip == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ver = "${{ steps.info.outputs.version }}"
+          gh release create "v$ver" "savior-patched-$ver.zip" `
+            --title "Savior Patched v$ver" `
+            --notes "Automated patched build of CocCoc Savior extension v$ver."
+
