@@ -5,7 +5,7 @@ del(.externally_connectable) |
 .permissions -= ["favicon", "metricsPrivate"] |
 
 .content_scripts |= map(
-  select(.js | map(test("scrapper|promote|ccserp")) | any | not)
+  select(.js | map(test("scrapper|promote|ccserp|onboarding")) | any | not)
 ) |
 
 walk(
