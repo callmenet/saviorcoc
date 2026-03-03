@@ -17,7 +17,14 @@ DOMAIN_PATTERN = re.compile(
 )
 
 
-def extract_crx(crx_path, out_dir):
+def extract_crx(crx_path, out_dir, is_dir=False):
+    if is_dir:
+        if os.path.exists(out_dir):
+            shutil.rmtree(out_dir)
+        shutil.copytree(crx_path, out_dir)
+        print(f"Copied extension dir -> {out_dir}/")
+        return
+
     data = open(crx_path, "rb").read()
     if data[:4] == b"Cr24":
         header_len = struct.unpack_from("<I", data, 8)[0]
@@ -85,14 +92,6 @@ def is_covered(domain, existing_filters):
             return True
     return False
 
-def is_covered(domain, existing_filters):
-    parts = domain.lstrip("|").split(".")
-    for i in range(len(parts) - 1):
-        parent_filter = "||" + ".".join(parts[i:])
-        if parent_filter in existing_filters:
-            return True
-    return False
-
 
 def merge_rules(rules_path, discovered, debloat_block):
     rules = json.load(open(rules_path, encoding="utf-8"))
@@ -144,16 +143,17 @@ def repack(src_dir, out_zip):
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: patch.py <crx_path> <version>")
+        print("Usage: patch.py <crx_path> <version> [is_dir]")
         sys.exit(1)
 
     crx_path = sys.argv[1]
     version  = sys.argv[2]
+    is_dir   = len(sys.argv) > 3 and sys.argv[3].lower() == "true"
     work     = "work"
     out_zip  = f"savior-patched-{version}.zip"
 
     print("-- Extract")
-    extract_crx(crx_path, work)
+    extract_crx(crx_path, work, is_dir=is_dir)
 
     print("-- Patch manifest.json")
     apply_jq_patch(os.path.join(work, "manifest.json"), "patches/manifest.patch.jq")

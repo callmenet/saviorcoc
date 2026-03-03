@@ -25,21 +25,49 @@ jobs:
           (New-Object Net.WebClient).DownloadFile("https://files1.coccoc.com/browser/x64/coccoc_en_machine.exe", $tmp)
           Start-Process $tmp -ArgumentList "/silent /install" -Wait
 
-      - name: Get version and locate CRX
+      - name: Launch CocCoc to populate extension cache
+        shell: pwsh
+        run: |
+          $exe = "C:\Program Files\CocCoc\Browser\Application\browser.exe"
+          Start-Process $exe -ArgumentList "--no-first-run", "--no-default-browser-check"
+          Start-Sleep 10
+          Stop-Process -Name browser -Force -ErrorAction SilentlyContinue
+          Start-Sleep 2
+
+      - name: Get version and locate extension
         id: info
         shell: pwsh
         run: |
           $exe = "C:\Program Files\CocCoc\Browser\Application\browser.exe"
           if (-not (Test-Path $exe)) { throw "browser.exe not found" }
           $ver = (Get-Item $exe).VersionInfo.ProductVersion
+
           $crx = "C:\Program Files\CocCoc\Browser\Application\$ver\Extensions\savior.crx"
-          if (-not (Test-Path $crx)) { throw "savior.crx not found at: $crx" }
-          "version=$ver" >> $env:GITHUB_OUTPUT
+
+          if (-not (Test-Path $crx)) {
+            $cacheRoot = "$env:LOCALAPPDATA\CocCoc\Browser\User Data\Default\Extensions"
+            $found = Get-ChildItem $cacheRoot -Recurse -Filter "manifest.json" |
+              Where-Object {
+                $content = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
+                $content -match '__MSG_appName__' -and $content -match 'savior'
+              } |
+              Select-Object -First 1
+
+            if (-not $found) { throw "savior extension not found in user data cache" }
+            $crx = $found.DirectoryName
+            "crx_is_dir=true" >> $env:GITHUB_OUTPUT
+            Write-Host "Found in user data: $crx"
+          } else {
+            "crx_is_dir=false" >> $env:GITHUB_OUTPUT
+            Write-Host "Found CRX: $crx"
+          }
+
+          "version=$ver"   >> $env:GITHUB_OUTPUT
           "crx_path=$crx" >> $env:GITHUB_OUTPUT
 
       - name: Skip if version already released
         id: check
-        if: github.event_name != 'push'
+        if: github.event_name == 'schedule'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -49,13 +77,18 @@ jobs:
           $exists = ($releases | Where-Object { $_.tagName -eq $tag }).Count -gt 0
           "skip=$($exists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
 
-
-      - name: Force rebuild on push
+      - name: Force rebuild on push or manual dispatch
         id: check_push
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         shell: pwsh
         run: |
           "skip=false" >> $env:GITHUB_OUTPUT
+
+      - name: Install jq
+        if: steps.check.outputs.skip == 'false' || steps.check_push.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          choco install jq -y --no-progress
 
       - name: Patch and repack
         if: steps.check.outputs.skip == 'false' || steps.check_push.outputs.skip == 'false'
@@ -63,7 +96,8 @@ jobs:
         run: |
           python patch.py `
             "${{ steps.info.outputs.crx_path }}" `
-            "${{ steps.info.outputs.version }}"
+            "${{ steps.info.outputs.version }}" `
+            "${{ steps.info.outputs.crx_is_dir }}"
 
       - name: Create GitHub Release
         if: steps.check.outputs.skip == 'false' || steps.check_push.outputs.skip == 'false'
